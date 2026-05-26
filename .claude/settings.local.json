@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm chart_data.json)",
+      "Bash(open dashboard.html)",
+      "Bash(python3)",
+      "Bash(grep -o \"const DATA = .\\\\{0,200\\\\}\" dashboard.html)",
+      "Bash(curl -sSL -o chart.umd.min.js \"https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js\")",
+      "Bash(awk '/firstChunk.match/' dashboard.html)",
+      "Bash(ls -la Data_Download_and_DAU*)",
+      "Bash(file Data_Download_and_DAU.csv)",
+      "Bash(python3 -c ' *)",
+      "Bash(open timespent_dashboard.html)",
+      "Bash(open retention_dashboard.html)",
+      "Bash(open rankings_dashboard.html)"
+    ]
+  }
+}

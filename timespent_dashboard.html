@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Avg Time Spent Dashboard</title>
+<script src="chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    padding: 20px;
+  }
+  h1 { margin: 0 0 2px; font-size: 20px; }
+  .subtitle { color: #64748b; margin-bottom: 16px; font-size: 13px; line-height: 1.45; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  #loader {
+    background: #fff;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 22px;
+    margin-bottom: 20px;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  #loader.dragging { border-color: #3b82f6; background: #eff6ff; }
+  #loader .row { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  #loader .hint { color: #64748b; font-size: 13px; margin-top: 6px; }
+  #loader.compact { padding: 10px 14px; text-align: left; }
+  #loader.compact .hint { margin-top: 0; }
+  .btn { background: #0f172a; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: #1e293b; }
+  .btn.secondary { background: #e2e8f0; color: #0f172a; }
+  .btn.secondary:hover { background: #cbd5e1; }
+  #status { font-size: 12px; color: #475569; }
+  #status .ok { color: #16a34a; }
+  #status .err { color: #dc2626; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: #fff; border-radius: 10px; padding: 12px 14px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .kpi .name { font-size: 12px; color: #475569; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .val { font-size: 20px; font-weight: 600; margin-top: 4px; }
+  .kpi .sub { font-size: 11px; color: #64748b; margin-top: 2px; }
+  .delta { font-size: 12px; margin-top: 2px; font-weight: 500; }
+  .delta.up { color: #16a34a; }
+  .delta.down { color: #dc2626; }
+  .delta.flat { color: #64748b; }
+
+  .charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .note { color: #64748b; font-size: 12px; margin-bottom: 12px; }
+  .chart-wrap { position: relative; height: 420px; }
+  .chart-wrap.tall { height: 460px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  th { color: #475569; font-weight: 500; background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f8fafc; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .bar-bg { background: #e2e8f0; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px; min-width: 80px; }
+  .bar-fg { height: 100%; background: #3b82f6; }
+
+  #errBox { display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #empty { text-align: center; color: #64748b; padding: 60px 20px; font-size: 15px; }
+  #empty .big { font-size: 48px; margin-bottom: 12px; }
+  @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>⏱️ Avg Time Spent Dashboard</h1>
+  <div class="subtitle">CSV format: <code>Date, "&lt;App&gt; Avg Time Spent (Minutes / Day)", ...</code> — đơn vị: <b>phút/người/ngày</b>.</div>
+
+  <div id="errBox"></div>
+
+  <div id="loader">
+    <div class="row">
+      <button class="btn" id="pickBtn">📂 Load Time_Spent CSV</button>
+      <input type="file" id="fileInput" accept=".csv,.tsv,.txt" style="display:none;">
+      <span class="hint">hoặc kéo-thả file CSV vào đây</span>
+      <span id="status"></span>
+      <button class="btn secondary" id="clearBtn" style="display:none;">Clear cached</button>
+    </div>
+  </div>
+
+  <div id="empty">
+    <div class="big">⏱️</div>
+    <div>Chưa có dữ liệu. Hãy chọn file <code>Time_Spent.csv</code> để bắt đầu.</div>
+    <div style="margin-top:8px;font-size:13px;">Cột bắt buộc: <b>Date</b> + một hoặc nhiều cột tên có dạng <b>"&lt;App&gt; Avg Time Spent (Minutes / Day)"</b>.</div>
+  </div>
+
+  <div id="content" style="display:none;">
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="charts">
+      <div class="card">
+        <h2>📈 Avg Time Spent theo ngày</h2>
+        <div class="note">Đơn vị: phút/người/ngày. Click trên legend để ẩn/hiện app. Hover xem chi tiết.</div>
+        <div class="chart-wrap tall"><canvas id="timeChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>🏆 Avg toàn kỳ theo App</h2>
+        <div class="note">Trung bình của Avg Time Spent qua các ngày có data, xếp từ cao → thấp.</div>
+        <div class="chart-wrap tall"><canvas id="appBarChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bảng tổng hợp</h2>
+      <table>
+        <thead><tr>
+          <th>App</th>
+          <th class="num">Avg toàn kỳ (m/ngày)</th>
+          <th class="num">Peak (m/ngày)</th>
+          <th class="num">Min (m/ngày)</th>
+          <th class="num">Last 30d Avg</th>
+          <th class="num">Prior 30d Avg</th>
+          <th class="num">% Change</th>
+          <th class="num">Days w/ data</th>
+        </tr></thead>
+        <tbody id="appTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const palette = [
+  '#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6',
+  '#ec4899','#14b8a6','#f97316','#06b6d4','#a855f7',
+  '#84cc16','#eab308','#64748b','#0ea5e9','#dc2626'
+];
+const fmt  = n => Number(n).toLocaleString('en-US');
+const fmt1 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const fmt2 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+function showError(msg) {
+  const b = document.getElementById('errBox');
+  b.style.display = 'block'; b.textContent = msg;
+}
+function clearError() {
+  const b = document.getElementById('errBox');
+  b.style.display = 'none'; b.textContent = '';
+}
+function setStatus(html) { document.getElementById('status').innerHTML = html; }
+
+window.addEventListener('error', e => {
+  showError('[JS ERROR] ' + (e.message || e.error) + ' @ ' + (e.filename || '') + ':' + (e.lineno || ''));
+});
+
+// ---------- CSV parsing ----------
+function detectDelimiter(text) {
+  const sample = text.split(/\r?\n/).slice(0, 5).join('\n');
+  const tabs = (sample.match(/\t/g) || []).length;
+  const commas = (sample.match(/,/g) || []).length;
+  const semis = (sample.match(/;/g) || []).length;
+  if (tabs >= Math.max(commas, semis)) return '\t';
+  if (semis > commas) return ';';
+  return ',';
+}
+
+function parseCSV(text, delim) {
+  const rows = [];
+  let i = 0, field = '', row = [], inQuotes = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === delim) { row.push(field); field = ''; i++; continue; }
+    if (c === '\n' || c === '\r') {
+      row.push(field); field = '';
+      if (row.length > 1 || (row.length === 1 && row[0] !== '')) rows.push(row);
+      row = [];
+      if (c === '\r' && text[i+1] === '\n') i++;
+      i++; continue;
+    }
+    field += c; i++;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => {
+      let text = r.result;
+      const firstChunk = text.slice(0, 500);
+      const ctrlCount = (firstChunk.match(/[\x00-\x08\x0E-\x1F]/g) || []).length;
+      if (ctrlCount > 5) {
+        const r2 = new FileReader();
+        r2.onerror = reject;
+        r2.onload = () => resolve(r2.result);
+        r2.readAsText(file, 'UTF-16LE');
+      } else resolve(text);
+    };
+    r.readAsText(file, 'UTF-8');
+  });
+}
+
+function toNumOrNull(v) {
+  const s = String(v == null ? '' : v).trim().replace(/[, ]/g, '');
+  if (s === '' || s === '-' || s.toLowerCase() === 'n/a') return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+
+// ---------- Build dataset ----------
+function buildDataset(rows) {
+  if (!rows.length) throw new Error('File rỗng.');
+  const header = rows[0].map(h => String(h || '').trim());
+  const dateIdx = header.findIndex(h => /^date$/i.test(h) || /date/i.test(h));
+  if (dateIdx < 0) throw new Error('Không tìm thấy cột Date.');
+
+  // Detect "<App> Avg Time Spent (Minutes / Day)" columns
+  const cols = [];
+  header.forEach((h, i) => {
+    const m = h.match(/^(.+?)\s*Avg\s*Time\s*Spent\s*(?:\(.*?\))?\s*$/i);
+    if (m) cols.push({ idx: i, app: m[1].trim() });
+  });
+  if (!cols.length) {
+    throw new Error(`Không tìm thấy cột Avg Time Spent.\nHeader: [${header.join(', ')}]`);
+  }
+
+  const dates = [];
+  const apps = cols.map(c => ({
+    name: c.app,
+    values: [],   // aligned with dates
+  }));
+
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || !row.length) continue;
+    const date = String(row[dateIdx] || '').trim();
+    if (!date) continue;
+    dates.push(date);
+    cols.forEach((c, k) => apps[k].values.push(toNumOrNull(row[c.idx])));
+  }
+
+  // Sort by date asc
+  const order = dates.map((d, i) => [d, i]).sort((a, b) => a[0] < b[0] ? -1 : 1);
+  const sortedDates = order.map(o => o[0]);
+  apps.forEach(a => a.values = order.map(o => a.values[o[1]]));
+
+  // Stats per app
+  apps.forEach(a => {
+    const v = a.values.filter(x => x != null);
+    a.daysWithData = v.length;
+    a.avgAll  = v.length ? v.reduce((s,x)=>s+x,0)/v.length : 0;
+    a.peak    = v.length ? Math.max(...v) : 0;
+    a.min     = v.length ? Math.min(...v) : 0;
+    const last30 = a.values.slice(-30).filter(x => x != null);
+    const prev30 = a.values.length >= 60 ? a.values.slice(-60, -30).filter(x => x != null) : [];
+    a.last30Avg = last30.length ? last30.reduce((s,x)=>s+x,0)/last30.length : null;
+    a.prev30Avg = prev30.length ? prev30.reduce((s,x)=>s+x,0)/prev30.length : null;
+    a.pctChange = (a.prev30Avg != null && a.prev30Avg > 0 && a.last30Avg != null)
+      ? ((a.last30Avg - a.prev30Avg)/a.prev30Avg*100) : null;
+  });
+
+  apps.sort((a, b) => b.avgAll - a.avgAll);
+  return { dates: sortedDates, apps };
+}
+
+// ---------- Rendering ----------
+let charts = { line: null, bar: null };
+function render(DATA) {
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('content').style.display = '';
+
+  const deltaHtml = p => {
+    if (p === null || p === undefined) return '<span class="delta flat">—</span>';
+    const cls = p > 0 ? 'up' : (p < 0 ? 'down' : 'flat');
+    const arrow = p > 0 ? '▲' : (p < 0 ? '▼' : '◆');
+    const sign = p > 0 ? '+' : '';
+    return `<span class="delta ${cls}">${arrow} ${sign}${p.toFixed(1)}%</span>`;
+  };
+
+  // KPI: overall avg across all apps + top 5 by avg
+  const allVals = DATA.apps.flatMap(a => a.values.filter(x => x != null));
+  const overallAvg = allVals.length ? allVals.reduce((s,x)=>s+x,0)/allVals.length : 0;
+  const top = DATA.apps.slice(0, 5);
+  document.getElementById('kpiRow').innerHTML = `
+    <div class="kpi" style="border-color:#0f172a;">
+      <div class="name" style="color:#0f172a;font-weight:600;">AVG TOÀN BỘ APP</div>
+      <div class="val">${fmt1(overallAvg)} <span style="font-size:12px;color:#64748b;font-weight:400;">phút/ngày</span></div>
+      <div class="sub">${DATA.apps.length} apps · ${DATA.dates.length} ngày</div>
+    </div>
+  ` + top.map((a, i) => `
+    <div class="kpi">
+      <div class="name" title="${a.name}"><span class="swatch" style="background:${palette[i % palette.length]}"></span>${a.name}</div>
+      <div class="val">${fmt1(a.avgAll)} <span style="font-size:11px;color:#64748b;font-weight:400;">m/ngày</span></div>
+      <div class="sub">Peak ${fmt1(a.peak)} · Last 30d ${a.last30Avg != null ? fmt1(a.last30Avg) : '—'}</div>
+      ${deltaHtml(a.pctChange)}
+    </div>
+  `).join('');
+
+  // Line chart
+  const lineDatasets = DATA.apps.map((a, i) => ({
+    label: a.name,
+    data: a.values,    // nulls preserved → broken line for missing days
+    borderColor: palette[i % palette.length],
+    backgroundColor: palette[i % palette.length] + '22',
+    borderWidth: 1.8,
+    fill: false,
+    tension: 0.25,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    spanGaps: false,
+    hidden: i >= 6,
+  }));
+  const baseTooltip = {
+    mode: 'index', intersect: false,
+    backgroundColor: 'rgba(15,23,42,0.96)',
+    titleColor: '#f1f5f9', bodyColor: '#e2e8f0',
+    borderColor: '#475569', borderWidth: 1, padding: 12,
+    itemSort: (a, b) => (b.parsed.y || 0) - (a.parsed.y || 0),
+  };
+
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('timeChart'), {
+    type: 'line',
+    data: { labels: DATA.dates, datasets: lineDatasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { ...baseTooltip, callbacks: {
+          title: items => items[0].label,
+          label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt1(ctx.parsed.y)} m`,
+        }},
+      },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { color: '#f1f5f9' } },
+        y: { title: { display: true, text: 'Phút / người / ngày', color: '#64748b' },
+             ticks: { callback: v => fmt1(v) + 'm' }, grid: { color: '#f1f5f9' } }
+      }
+    }
+  });
+
+  // Bar chart — apps sorted by overall avg
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('appBarChart'), {
+    type: 'bar',
+    data: {
+      labels: DATA.apps.map(a => a.name),
+      datasets: [{
+        label: 'Avg toàn kỳ',
+        data: DATA.apps.map(a => +a.avgAll.toFixed(2)),
+        backgroundColor: DATA.apps.map((_, i) => palette[i % palette.length] + 'cc'),
+        borderColor: DATA.apps.map((_, i) => palette[i % palette.length]),
+        borderWidth: 1,
+      }, {
+        label: 'Peak',
+        data: DATA.apps.map(a => +a.peak.toFixed(2)),
+        backgroundColor: 'transparent',
+        borderColor: '#0f172a',
+        borderWidth: 1.5,
+        type: 'line',
+        pointStyle: 'rectRot',
+        pointRadius: 5,
+        showLine: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { ...baseTooltip, callbacks: {
+          label: ctx => ` ${ctx.dataset.label}: ${fmt1(ctx.parsed.x)} phút/ngày`
+        }},
+      },
+      scales: {
+        x: { title: { display: true, text: 'Phút / người / ngày', color: '#64748b' },
+             ticks: { callback: v => fmt1(v) + 'm' }, grid: { color: '#f1f5f9' } },
+        y: { ticks: { autoSkip: false, font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+
+  // Table
+  const tbody = document.getElementById('appTable');
+  tbody.innerHTML = DATA.apps.map((a, i) => {
+    const ch = a.pctChange;
+    const chCls = ch === null ? 'flat' : (ch > 0 ? 'up' : (ch < 0 ? 'down' : 'flat'));
+    const chTxt = ch === null ? '—' : `${ch > 0 ? '+' : ''}${ch.toFixed(1)}%`;
+    return `<tr>
+      <td><span class="swatch" style="background:${palette[i % palette.length]}"></span>${a.name}</td>
+      <td class="num">${fmt2(a.avgAll)}</td>
+      <td class="num">${fmt2(a.peak)}</td>
+      <td class="num">${fmt2(a.min)}</td>
+      <td class="num">${a.last30Avg != null ? fmt2(a.last30Avg) : '—'}</td>
+      <td class="num">${a.prev30Avg != null ? fmt2(a.prev30Avg) : '—'}</td>
+      <td class="num delta ${chCls}" style="font-weight:500;">${chTxt}</td>
+      <td class="num">${a.daysWithData}/${DATA.dates.length}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('loader').classList.add('compact');
+  document.getElementById('clearBtn').style.display = '';
+}
+
+// ---------- Load flow ----------
+async function processFile(file) {
+  try {
+    clearError();
+    setStatus(`<span>Đang đọc <b>${file.name}</b>...</span>`);
+    const text = await readFileAsText(file);
+    const delim = detectDelimiter(text);
+    const rows = parseCSV(text, delim);
+    const DATA = buildDataset(rows);
+    if (!DATA.dates.length || !DATA.apps.length) throw new Error('Không trích xuất được dữ liệu.');
+    render(DATA);
+    try {
+      localStorage.setItem('timespent_data', JSON.stringify(DATA));
+      localStorage.setItem('timespent_filename', file.name);
+      localStorage.setItem('timespent_loaded_at', new Date().toISOString());
+    } catch (e) {}
+    const ts = new Date().toLocaleString('vi-VN');
+    setStatus(`<span class="ok">✓ Đã load <b>${file.name}</b> — ${DATA.apps.length} apps × ${DATA.dates.length} ngày · ${ts}</span>`);
+  } catch (err) {
+    setStatus(`<span class="err">✗ ${err.message}</span>`);
+    showError(err.stack || err.message);
+  }
+}
+
+document.getElementById('pickBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+const loader = document.getElementById('loader');
+['dragenter','dragover'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.add('dragging'); }));
+['dragleave','drop'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.remove('dragging'); }));
+loader.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) processFile(f); });
+document.getElementById('clearBtn').addEventListener('click', () => {
+  localStorage.removeItem('timespent_data');
+  localStorage.removeItem('timespent_filename');
+  localStorage.removeItem('timespent_loaded_at');
+  location.reload();
+});
+
+(function init() {
+  if (typeof Chart === 'undefined') {
+    showError('Không tải được Chart.js. Hãy giữ file chart.umd.min.js cùng thư mục với HTML này.');
+    return;
+  }
+  const cached = localStorage.getItem('timespent_data');
+  const fn = localStorage.getItem('timespent_filename') || '?';
+  const at = localStorage.getItem('timespent_loaded_at');
+  if (cached) {
+    try {
+      const DATA = JSON.parse(cached);
+      render(DATA);
+      const tsTxt = at ? ` · ${new Date(at).toLocaleString('vi-VN')}` : '';
+      setStatus(`<span class="ok">✓ Đang hiển thị data cache từ <b>${fn}</b>${tsTxt}</span> — load lại file để cập nhật.`);
+    } catch (e) {
+      showError('Không đọc được cache: ' + e.message);
+    }
+  }
+})();
+</script>
+</body>
+</html>

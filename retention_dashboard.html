@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>App Store Retention Dashboard</title>
+<script src="chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    padding: 20px;
+  }
+  h1 { margin: 0 0 2px; font-size: 20px; }
+  .subtitle { color: #64748b; margin-bottom: 16px; font-size: 13px; line-height: 1.45; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+
+  #loader { background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 22px; margin-bottom: 20px; text-align: center; transition: all 0.15s; }
+  #loader.dragging { border-color: #3b82f6; background: #eff6ff; }
+  #loader .row { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  #loader .hint { color: #64748b; font-size: 13px; margin-top: 6px; }
+  #loader.compact { padding: 10px 14px; text-align: left; }
+  .btn { background: #0f172a; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: #1e293b; }
+  .btn.secondary { background: #e2e8f0; color: #0f172a; }
+  .btn.secondary:hover { background: #cbd5e1; }
+  #status { font-size: 12px; color: #475569; }
+  #status .ok { color: #16a34a; }
+  #status .err { color: #dc2626; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: #fff; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .kpi .name { font-size: 12px; color: #475569; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .kpi-grid .item { background: #f8fafc; border-radius: 6px; padding: 6px 8px; text-align: center; }
+  .kpi-grid .lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+  .kpi-grid .v { font-size: 16px; font-weight: 600; }
+
+  .charts { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .note { color: #64748b; font-size: 12px; margin-bottom: 12px; }
+  .card .toggles { float: right; font-size: 11px; }
+  .card .toggles button { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; margin-left: 4px; }
+  .card .toggles button.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .chart-wrap { position: relative; height: 420px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  th { color: #475569; font-weight: 500; background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f8fafc; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .heat { padding: 2px 6px; border-radius: 4px; font-weight: 500; }
+
+  #errBox { display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #empty { text-align: center; color: #64748b; padding: 60px 20px; font-size: 15px; }
+  #empty .big { font-size: 48px; margin-bottom: 12px; }
+  @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>🔁 App Store Retention Dashboard</h1>
+  <div class="subtitle">CSV format: <code>Retention Period, "&lt;App&gt; (%)", ...</code> — giá trị: % user còn lại sau N ngày.</div>
+
+  <div id="errBox"></div>
+
+  <div id="loader">
+    <div class="row">
+      <button class="btn" id="pickBtn">📂 Load Retention CSV</button>
+      <input type="file" id="fileInput" accept=".csv,.tsv,.txt" style="display:none;">
+      <span class="hint">hoặc kéo-thả file CSV vào đây</span>
+      <span id="status"></span>
+      <button class="btn secondary" id="clearBtn" style="display:none;">Clear cached</button>
+    </div>
+  </div>
+
+  <div id="empty">
+    <div class="big">🔁</div>
+    <div>Chưa có dữ liệu. Hãy chọn file CSV retention để bắt đầu.</div>
+    <div style="margin-top:8px;font-size:13px;">Cột 1: <b>Retention Period</b> (Day 1, Day 2, ...) — các cột sau: <b>"&lt;App&gt; (%)"</b>.</div>
+  </div>
+
+  <div id="content" style="display:none;">
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="charts">
+      <div class="card">
+        <div class="toggles">
+          <button id="btnLinear" class="active">Linear X</button>
+          <button id="btnLog">Log X</button>
+        </div>
+        <h2>📉 Retention Curves</h2>
+        <div class="note">Mỗi đường = 1 app. Hover xem retention chính xác. Đoạn đứt = chưa có data (D30/D60/D90/D180).</div>
+        <div class="chart-wrap"><canvas id="retentionChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>📊 So sánh D1 / D7 / D14</h2>
+        <div class="note">3 mốc retention quan trọng nhất — càng cao càng tốt.</div>
+        <div class="chart-wrap"><canvas id="compareChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bảng dữ liệu Retention (%)</h2>
+      <table>
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div style="margin-top:10px;font-size:11px;color:#64748b;">
+        Heatmap: <span class="heat" style="background:#dcfce7;color:#166534;">≥30%</span>
+        <span class="heat" style="background:#fef9c3;color:#854d0e;">15-30%</span>
+        <span class="heat" style="background:#fee2e2;color:#991b1b;">&lt;15%</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+const palette = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#a855f7'];
+const fmt1 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const fmt2 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+function showError(msg) { const b = document.getElementById('errBox'); b.style.display='block'; b.textContent=msg; }
+function clearError() { const b = document.getElementById('errBox'); b.style.display='none'; b.textContent=''; }
+function setStatus(html) { document.getElementById('status').innerHTML = html; }
+window.addEventListener('error', e => showError('[JS ERROR] ' + (e.message || e.error) + ' @ ' + (e.filename || '') + ':' + (e.lineno || '')));
+
+function detectDelimiter(text) {
+  const sample = text.split(/\r?\n/).slice(0, 5).join('\n');
+  const tabs = (sample.match(/\t/g) || []).length;
+  const commas = (sample.match(/,/g) || []).length;
+  const semis = (sample.match(/;/g) || []).length;
+  if (tabs >= Math.max(commas, semis)) return '\t';
+  if (semis > commas) return ';';
+  return ',';
+}
+function parseCSV(text, delim) {
+  const rows = []; let i=0, field='', row=[], inQuotes=false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i+1]==='"') { field+='"'; i+=2; continue; } inQuotes=false; i++; continue; }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes=true; i++; continue; }
+    if (c === delim) { row.push(field); field=''; i++; continue; }
+    if (c === '\n' || c === '\r') {
+      row.push(field); field='';
+      if (row.length > 1 || (row.length === 1 && row[0] !== '')) rows.push(row);
+      row = [];
+      if (c === '\r' && text[i+1] === '\n') i++;
+      i++; continue;
+    }
+    field += c; i++;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => {
+      let text = r.result;
+      const firstChunk = text.slice(0, 500);
+      const ctrlCount = (firstChunk.match(/[\x00-\x08\x0E-\x1F]/g) || []).length;
+      if (ctrlCount > 5) {
+        const r2 = new FileReader(); r2.onerror = reject;
+        r2.onload = () => resolve(r2.result);
+        r2.readAsText(file, 'UTF-16LE');
+      } else resolve(text);
+    };
+    r.readAsText(file, 'UTF-8');
+  });
+}
+function toNumOrNull(v) {
+  const s = String(v == null ? '' : v).trim().replace(/[,%\s]/g, '');
+  if (s === '' || s === '-' || s.toLowerCase() === 'n/a') return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+function parseDayNum(label) {
+  const m = String(label).match(/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+function buildDataset(rows) {
+  if (rows.length < 2) throw new Error('File rỗng hoặc thiếu data.');
+  const header = rows[0].map(h => String(h || '').trim());
+  // Find period column (usually first)
+  let periodIdx = header.findIndex(h => /retention\s*period|period|day/i.test(h));
+  if (periodIdx < 0) periodIdx = 0;
+
+  // App columns = all others (strip "(%)" suffix for cleaner name)
+  const appCols = [];
+  header.forEach((h, i) => {
+    if (i === periodIdx) return;
+    if (!h) return;
+    const name = h.replace(/\s*\(\s*%\s*\)\s*$/i, '').trim();
+    appCols.push({ idx: i, app: name });
+  });
+  if (!appCols.length) throw new Error(`Không tìm thấy cột retention nào.\nHeader: [${header.join(', ')}]`);
+
+  const periods = [];
+  const apps = appCols.map(c => ({ name: c.app, values: [] }));
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row || !row.length) continue;
+    const label = String(row[periodIdx] || '').trim();
+    if (!label) continue;
+    const day = parseDayNum(label);
+    periods.push({ label, day: day != null ? day : (periods.length + 1) });
+    appCols.forEach((c, k) => apps[k].values.push(toNumOrNull(row[c.idx])));
+  }
+
+  // Stats per app: D1, D7, D14, D30 if present
+  apps.forEach(a => {
+    a.byDay = {};
+    periods.forEach((p, i) => { a.byDay[p.day] = a.values[i]; });
+    a.d1 = a.byDay[1] != null ? a.byDay[1] : null;
+    a.d7 = a.byDay[7] != null ? a.byDay[7] : null;
+    a.d14 = a.byDay[14] != null ? a.byDay[14] : null;
+    a.d30 = a.byDay[30] != null ? a.byDay[30] : null;
+  });
+
+  // Sort apps by D1 descending (then D7)
+  apps.sort((a, b) => (b.d1 ?? -1) - (a.d1 ?? -1) || (b.d7 ?? -1) - (a.d7 ?? -1));
+
+  return { periods, apps };
+}
+
+// ---------- Rendering ----------
+let charts = { line: null, bar: null };
+let currentScale = 'linear';
+
+function buildLineChart(DATA, scaleType) {
+  // x = day number, y = retention %
+  const datasets = DATA.apps.map((a, i) => ({
+    label: a.name,
+    data: DATA.periods.map((p, k) => ({ x: p.day, y: a.values[k] })).filter(pt => pt.y != null),
+    borderColor: palette[i % palette.length],
+    backgroundColor: palette[i % palette.length] + '22',
+    borderWidth: 2.2,
+    fill: false,
+    tension: 0.2,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    showLine: true,
+    spanGaps: true,
+  }));
+
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('retentionChart'), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: 'rgba(15,23,42,0.96)', titleColor:'#f1f5f9', bodyColor:'#e2e8f0',
+          borderColor:'#475569', borderWidth:1, padding:12,
+          callbacks: {
+            title: items => `Day ${items[0].parsed.x}`,
+            label: ctx => ` ${ctx.dataset.label}: ${fmt1(ctx.parsed.y)}%`,
+            // Sort items descending
+            itemSort: (a, b) => b.parsed.y - a.parsed.y,
+          }
+        },
+      },
+      scales: {
+        x: {
+          type: scaleType,
+          title: { display: true, text: 'Days after install', color: '#64748b' },
+          min: scaleType === 'log' ? 1 : 0,
+          ticks: {
+            callback: v => 'D' + v,
+            // Show explicit ticks at common retention markers
+            ...(scaleType === 'log' ? { autoSkip: false } : {}),
+          },
+          afterBuildTicks: scaleType === 'log' ? axis => {
+            axis.ticks = [1,2,3,4,5,6,7,14,30,60,90,180].map(v => ({ value: v }));
+          } : undefined,
+          grid: { color: '#f1f5f9' }
+        },
+        y: {
+          title: { display: true, text: 'Retention (%)', color: '#64748b' },
+          beginAtZero: true,
+          ticks: { callback: v => v + '%' },
+          grid: { color: '#f1f5f9' }
+        }
+      }
+    }
+  });
+}
+
+function buildBarChart(DATA) {
+  // Group bars per app, three series D1/D7/D14
+  const labels = DATA.apps.map(a => a.name);
+  const mk = (key, colorIdx, lbl) => ({
+    label: lbl,
+    data: DATA.apps.map(a => a[key]),
+    backgroundColor: palette[colorIdx] + 'cc',
+    borderColor: palette[colorIdx],
+    borderWidth: 1,
+  });
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('compareChart'), {
+    type: 'bar',
+    data: { labels, datasets: [mk('d1', 0, 'D1'), mk('d7', 2, 'D7'), mk('d14', 4, 'D14')] },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          backgroundColor: 'rgba(15,23,42,0.96)', titleColor:'#f1f5f9', bodyColor:'#e2e8f0',
+          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x != null ? fmt1(ctx.parsed.x) + '%' : '—'}` }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, ticks: { callback: v => v + '%' }, grid: { color: '#f1f5f9' },
+             title: { display:true, text:'Retention (%)', color:'#64748b' } },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function heatColor(v) {
+  if (v == null) return '';
+  if (v >= 30) return 'background:#dcfce7;color:#166534;';
+  if (v >= 15) return 'background:#fef9c3;color:#854d0e;';
+  return 'background:#fee2e2;color:#991b1b;';
+}
+
+function render(DATA) {
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('content').style.display = '';
+
+  // KPI cards per app
+  const kpiHtml = DATA.apps.map((a, i) => `
+    <div class="kpi">
+      <div class="name" title="${a.name}"><span class="swatch" style="background:${palette[i % palette.length]}"></span>${a.name}</div>
+      <div class="kpi-grid">
+        <div class="item"><div class="lbl">D1</div><div class="v">${a.d1 != null ? fmt1(a.d1)+'%' : '—'}</div></div>
+        <div class="item"><div class="lbl">D7</div><div class="v">${a.d7 != null ? fmt1(a.d7)+'%' : '—'}</div></div>
+        <div class="item"><div class="lbl">D14</div><div class="v">${a.d14 != null ? fmt1(a.d14)+'%' : '—'}</div></div>
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('kpiRow').innerHTML = kpiHtml;
+
+  buildLineChart(DATA, currentScale);
+  buildBarChart(DATA);
+
+  // Table
+  const headHtml = '<th>Retention Period</th>' + DATA.apps.map((a, i) =>
+    `<th class="num"><span class="swatch" style="background:${palette[i % palette.length]}"></span>${a.name}</th>`
+  ).join('');
+  document.getElementById('tableHead').innerHTML = headHtml;
+  document.getElementById('tableBody').innerHTML = DATA.periods.map((p, k) => {
+    const cells = DATA.apps.map(a => {
+      const v = a.values[k];
+      return `<td class="num"><span class="heat" style="${heatColor(v)}">${v != null ? fmt2(v)+'%' : '—'}</span></td>`;
+    }).join('');
+    return `<tr><td><b>${p.label}</b></td>${cells}</tr>`;
+  }).join('');
+
+  document.getElementById('loader').classList.add('compact');
+  document.getElementById('clearBtn').style.display = '';
+}
+
+// ---------- Load flow ----------
+let LAST_DATA = null;
+async function processFile(file) {
+  try {
+    clearError();
+    setStatus(`<span>Đang đọc <b>${file.name}</b>...</span>`);
+    const text = await readFileAsText(file);
+    const delim = detectDelimiter(text);
+    const rows = parseCSV(text, delim);
+    const DATA = buildDataset(rows);
+    if (!DATA.periods.length || !DATA.apps.length) throw new Error('Không trích xuất được dữ liệu.');
+    LAST_DATA = DATA;
+    render(DATA);
+    try {
+      localStorage.setItem('retention_data', JSON.stringify(DATA));
+      localStorage.setItem('retention_filename', file.name);
+      localStorage.setItem('retention_loaded_at', new Date().toISOString());
+    } catch(e) {}
+    const ts = new Date().toLocaleString('vi-VN');
+    setStatus(`<span class="ok">✓ Đã load <b>${file.name}</b> — ${DATA.apps.length} apps × ${DATA.periods.length} mốc · ${ts}</span>`);
+  } catch (err) {
+    setStatus(`<span class="err">✗ ${err.message}</span>`);
+    showError(err.stack || err.message);
+  }
+}
+
+document.getElementById('pickBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+const loader = document.getElementById('loader');
+['dragenter','dragover'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.add('dragging'); }));
+['dragleave','drop'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.remove('dragging'); }));
+loader.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) processFile(f); });
+document.getElementById('clearBtn').addEventListener('click', () => {
+  ['retention_data','retention_filename','retention_loaded_at'].forEach(k => localStorage.removeItem(k));
+  location.reload();
+});
+
+document.getElementById('btnLinear').addEventListener('click', () => {
+  currentScale = 'linear';
+  document.getElementById('btnLinear').classList.add('active');
+  document.getElementById('btnLog').classList.remove('active');
+  if (LAST_DATA) buildLineChart(LAST_DATA, currentScale);
+});
+document.getElementById('btnLog').addEventListener('click', () => {
+  currentScale = 'logarithmic';
+  document.getElementById('btnLog').classList.add('active');
+  document.getElementById('btnLinear').classList.remove('active');
+  if (LAST_DATA) buildLineChart(LAST_DATA, currentScale);
+});
+
+(function init() {
+  if (typeof Chart === 'undefined') {
+    showError('Không tải được Chart.js. Hãy giữ file chart.umd.min.js cùng thư mục.');
+    return;
+  }
+  const cached = localStorage.getItem('retention_data');
+  const fn = localStorage.getItem('retention_filename') || '?';
+  const at = localStorage.getItem('retention_loaded_at');
+  if (cached) {
+    try {
+      const DATA = JSON.parse(cached);
+      LAST_DATA = DATA;
+      render(DATA);
+      const tsTxt = at ? ` · ${new Date(at).toLocaleString('vi-VN')}` : '';
+      setStatus(`<span class="ok">✓ Đang hiển thị cache từ <b>${fn}</b>${tsTxt}</span> — load lại để cập nhật.`);
+    } catch (e) {
+      showError('Không đọc được cache: ' + e.message);
+    }
+  }
+})();
+</script>
+</body>
+</html>

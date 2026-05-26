@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Google Play Category Rankings Dashboard</title>
+<script src="chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f8fafc;
+    color: #0f172a;
+    padding: 20px;
+  }
+  h1 { margin: 0 0 2px; font-size: 20px; }
+  .subtitle { color: #64748b; margin-bottom: 16px; font-size: 13px; line-height: 1.45; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .meta-tag { display: inline-block; background: #dbeafe; color: #1e40af; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; margin-right: 4px; }
+
+  #loader { background: #fff; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 22px; margin-bottom: 20px; text-align: center; transition: all 0.15s; }
+  #loader.dragging { border-color: #3b82f6; background: #eff6ff; }
+  #loader .row { display: flex; align-items: center; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  #loader .hint { color: #64748b; font-size: 13px; }
+  #loader.compact { padding: 10px 14px; text-align: left; }
+  .btn { background: #0f172a; color: #fff; border: 0; padding: 8px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; }
+  .btn:hover { background: #1e293b; }
+  .btn.secondary { background: #e2e8f0; color: #0f172a; }
+  .btn.secondary:hover { background: #cbd5e1; }
+  #status { font-size: 12px; color: #475569; }
+  #status .ok { color: #16a34a; }
+  #status .err { color: #dc2626; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: #fff; border-radius: 10px; padding: 14px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .kpi .name { font-size: 12px; color: #0f172a; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .kpi-grid .item { background: #f8fafc; border-radius: 6px; padding: 6px 8px; text-align: center; }
+  .kpi-grid .lbl { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; }
+  .kpi-grid .v { font-size: 16px; font-weight: 600; }
+  .kpi-grid .item.best .v { color: #16a34a; }
+  .kpi-grid .item.worst .v { color: #dc2626; }
+
+  .charts { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  .card .note { color: #64748b; font-size: 12px; margin-bottom: 12px; }
+  .card .toggles { float: right; font-size: 11px; }
+  .card .toggles button { background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; margin-left: 4px; }
+  .card .toggles button.active { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .chart-wrap { position: relative; height: 460px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+  th { color: #475569; font-weight: 500; background: #f1f5f9; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:hover td { background: #f8fafc; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .rank-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 600; font-size: 12px; min-width: 38px; text-align: center; }
+  .rank-1, .rank-top { background: #fef9c3; color: #854d0e; }
+  .rank-good { background: #dcfce7; color: #166534; }
+  .rank-mid { background: #e0e7ff; color: #3730a3; }
+  .rank-low { background: #f1f5f9; color: #475569; }
+  .upd-dot { color: #ec4899; font-size: 14px; vertical-align: middle; margin-left: 2px; }
+
+  #errBox { display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 12px; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+  #empty { text-align: center; color: #64748b; padding: 60px 20px; font-size: 15px; }
+  #empty .big { font-size: 48px; margin-bottom: 12px; }
+  @media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>🏅 Category Rankings Dashboard</h1>
+  <div class="subtitle" id="metaLine">Sensor Tower category ranking — số nhỏ = thứ hạng cao hơn. <code>"Update"</code> = ngày app phát hành version mới.</div>
+
+  <div id="errBox"></div>
+
+  <div id="loader">
+    <div class="row">
+      <button class="btn" id="pickBtn">📂 Load Rankings CSV</button>
+      <input type="file" id="fileInput" accept=".csv,.tsv,.txt" style="display:none;">
+      <span class="hint">hoặc kéo-thả file CSV vào đây</span>
+      <span id="status"></span>
+      <button class="btn secondary" id="clearBtn" style="display:none;">Clear cached</button>
+    </div>
+  </div>
+
+  <div id="empty">
+    <div class="big">🏅</div>
+    <div>Chưa có dữ liệu. Hãy chọn file <code>Rankings.csv</code> để bắt đầu.</div>
+    <div style="margin-top:8px;font-size:13px;">Cột cần có: <b>App ID, App Name, Country, Date, topselling_*, Updated</b>.</div>
+  </div>
+
+  <div id="content" style="display:none;">
+    <div id="metaTags" style="margin-bottom:14px;"></div>
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="charts">
+      <div class="card">
+        <div class="toggles">
+          <button id="btnLinear" class="active">Linear</button>
+          <button id="btnLog">Log</button>
+        </div>
+        <h2>📉 Ranking theo ngày (rank 1 = đỉnh)</h2>
+        <div class="note">Y-axis lật ngược: rank nhỏ ở trên. Marker hồng = ngày Update version. Hover để xem chi tiết.</div>
+        <div class="chart-wrap"><canvas id="rankChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>📊 So sánh Best / Avg / Worst</h2>
+        <div class="note">Khoảng dao động rank của từng app (rank thấp ở dưới, cao ở trên).</div>
+        <div class="chart-wrap"><canvas id="rangeChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Bảng tổng hợp</h2>
+      <table>
+        <thead><tr>
+          <th>App</th>
+          <th class="num">Best</th>
+          <th class="num">Worst</th>
+          <th class="num">Avg</th>
+          <th class="num">Latest</th>
+          <th class="num">Days in Top 10</th>
+          <th class="num">Days in Top 50</th>
+          <th class="num">Updates</th>
+          <th class="num">Days</th>
+        </tr></thead>
+        <tbody id="appTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+<script>
+const palette = ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#f97316','#06b6d4','#a855f7','#84cc16','#eab308','#64748b'];
+const fmt0 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const fmt1 = n => Number(n).toLocaleString('en-US', { maximumFractionDigits: 1 });
+
+function showError(msg) { const b=document.getElementById('errBox'); b.style.display='block'; b.textContent=msg; }
+function clearError() { const b=document.getElementById('errBox'); b.style.display='none'; b.textContent=''; }
+function setStatus(html) { document.getElementById('status').innerHTML = html; }
+window.addEventListener('error', e => showError('[JS ERROR] ' + (e.message || e.error) + ' @ ' + (e.filename || '') + ':' + (e.lineno || '')));
+
+function detectDelimiter(text) {
+  const sample = text.split(/\r?\n/).slice(0, 10).join('\n');
+  const tabs = (sample.match(/\t/g) || []).length;
+  const commas = (sample.match(/,/g) || []).length;
+  const semis = (sample.match(/;/g) || []).length;
+  if (tabs >= Math.max(commas, semis)) return '\t';
+  if (semis > commas) return ';';
+  return ',';
+}
+function parseCSV(text, delim) {
+  const rows = []; let i=0, field='', row=[], inQuotes=false;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') { if (text[i+1]==='"') { field+='"'; i+=2; continue; } inQuotes=false; i++; continue; }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes=true; i++; continue; }
+    if (c === delim) { row.push(field); field=''; i++; continue; }
+    if (c === '\n' || c === '\r') {
+      row.push(field); field='';
+      if (row.length > 1 || (row.length === 1 && row[0] !== '')) rows.push(row);
+      row = [];
+      if (c === '\r' && text[i+1] === '\n') i++;
+      i++; continue;
+    }
+    field += c; i++;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onerror = reject;
+    r.onload = () => {
+      let text = r.result;
+      const firstChunk = text.slice(0, 500);
+      const ctrlCount = (firstChunk.match(/[\x00-\x08\x0E-\x1F]/g) || []).length;
+      if (ctrlCount > 5) {
+        const r2 = new FileReader(); r2.onerror = reject;
+        r2.onload = () => resolve(r2.result);
+        r2.readAsText(file, 'UTF-16LE');
+      } else resolve(text);
+    };
+    r.readAsText(file, 'UTF-8');
+  });
+}
+function toIntOrNull(v) {
+  const s = String(v == null ? '' : v).trim().replace(/[, ]/g, '');
+  if (s === '' || s === '-' || s.toLowerCase() === 'n/a') return null;
+  const n = parseInt(s, 10);
+  return isNaN(n) ? null : n;
+}
+
+// ---------- Build dataset ----------
+function buildDataset(rows) {
+  if (rows.length < 3) throw new Error('File rỗng hoặc thiếu data.');
+
+  // Find header row — the one that contains "App ID" and "Date"
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const cells = rows[i].map(c => String(c || '').trim().toLowerCase());
+    if (cells.includes('app id') && cells.includes('date')) { headerIdx = i; break; }
+  }
+  if (headerIdx < 0) throw new Error('Không tìm thấy header chứa App ID + Date.');
+
+  const header = rows[headerIdx].map(c => String(c || '').trim());
+  const norm = header.map(h => h.toLowerCase());
+  const col = {
+    appId:   norm.findIndex(h => h === 'app id'),
+    appName: norm.findIndex(h => h === 'app name'),
+    country: norm.findIndex(h => h === 'country'),
+    date:    norm.findIndex(h => h === 'date'),
+    rank:    norm.findIndex(h => h.startsWith('topselling') || h.startsWith('topfree') || h === 'rank'),
+    updated: norm.findIndex(h => h === 'updated'),
+  };
+  if (col.appId < 0 || col.date < 0 || col.rank < 0) {
+    throw new Error('Thiếu cột bắt buộc App ID / Date / Rank.\nHeader: [' + header.join(', ') + ']');
+  }
+
+  // Detect category from row right after header (if rank column is non-numeric)
+  let categoryLabel = null;
+  let dataStart = headerIdx + 1;
+  if (rows[dataStart]) {
+    const r = rows[dataStart];
+    const v = String(r[col.rank] || '').trim();
+    if (v && !/^\d+$/.test(v) && !r[col.appId]) {
+      categoryLabel = v;
+      dataStart += 1;
+    }
+  }
+
+  // Collect data
+  const appsMap = new Map();   // key = appId||appName  → record
+  const dateSet = new Set();
+  let country = null;
+  for (let i = dataStart; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.length) continue;
+    const appId = String(row[col.appId] || '').trim();
+    if (!appId) continue;
+    const appName = col.appName >= 0 ? String(row[col.appName] || '').trim() : appId;
+    if (col.country >= 0 && !country) country = String(row[col.country] || '').trim() || null;
+    const date = String(row[col.date] || '').trim();
+    if (!date) continue;
+    const rank = toIntOrNull(row[col.rank]);
+    const upd = col.updated >= 0 ? String(row[col.updated] || '').trim() : '';
+    dateSet.add(date);
+
+    const key = appId + '||' + appName;
+    if (!appsMap.has(key)) appsMap.set(key, { appId, appName, ranks: {}, updates: new Set() });
+    const a = appsMap.get(key);
+    a.ranks[date] = rank;
+    if (/update/i.test(upd)) a.updates.add(date);
+  }
+
+  const dates = Array.from(dateSet).sort();
+  const apps = Array.from(appsMap.values()).map(a => {
+    const series = dates.map(d => a.ranks[d] != null ? a.ranks[d] : null);
+    const vals = series.filter(v => v != null);
+    const best = vals.length ? Math.min(...vals) : null;
+    const worst = vals.length ? Math.max(...vals) : null;
+    const avg = vals.length ? (vals.reduce((s,x)=>s+x,0)/vals.length) : null;
+    // Latest non-null
+    let latest = null, latestDate = null;
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (series[i] != null) { latest = series[i]; latestDate = dates[i]; break; }
+    }
+    const top10 = vals.filter(v => v <= 10).length;
+    const top50 = vals.filter(v => v <= 50).length;
+    return {
+      appId: a.appId, appName: a.appName,
+      ranks: series, dates,
+      best, worst, avg, latest, latestDate,
+      top10, top50,
+      updates: Array.from(a.updates).sort(),
+      daysWithData: vals.length,
+    };
+  });
+
+  // Sort by best ascending (then by avg)
+  apps.sort((x, y) => {
+    if (x.best == null && y.best == null) return 0;
+    if (x.best == null) return 1;
+    if (y.best == null) return -1;
+    return x.best - y.best || (x.avg || 1e9) - (y.avg || 1e9);
+  });
+
+  return { dates, apps, country, category: categoryLabel };
+}
+
+// ---------- Rendering ----------
+let charts = { line: null, bar: null };
+let currentScale = 'linear';
+let LAST_DATA = null;
+
+function buildLineChart(DATA, scaleType) {
+  const datasets = DATA.apps.map((a, i) => {
+    const color = palette[i % palette.length];
+    const pointStyles = a.dates.map(d => a.updates.includes(d) ? 'rectRot' : 'circle');
+    const pointRadii  = a.dates.map(d => a.updates.includes(d) ? 6 : 0);
+    const pointBg     = a.dates.map(d => a.updates.includes(d) ? '#ec4899' : color);
+    return {
+      label: a.appName,
+      data: a.ranks,
+      borderColor: color,
+      backgroundColor: color + '22',
+      borderWidth: 1.8,
+      fill: false,
+      tension: 0.2,
+      pointRadius: pointRadii,
+      pointHoverRadius: 6,
+      pointStyle: pointStyles,
+      pointBackgroundColor: pointBg,
+      pointBorderColor: pointBg,
+      spanGaps: true,
+      hidden: i >= 6,
+    };
+  });
+
+  if (charts.line) charts.line.destroy();
+  charts.line = new Chart(document.getElementById('rankChart'), {
+    type: 'line',
+    data: { labels: DATA.dates, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: {
+          backgroundColor: 'rgba(15,23,42,0.96)', titleColor:'#f1f5f9', bodyColor:'#e2e8f0',
+          borderColor:'#475569', borderWidth:1, padding:12,
+          itemSort: (a, b) => (a.parsed.y ?? 1e9) - (b.parsed.y ?? 1e9),
+          callbacks: {
+            title: items => items[0].label,
+            label: ctx => {
+              if (ctx.parsed.y == null) return null;
+              const a = DATA.apps[ctx.datasetIndex];
+              const upd = a && a.updates.includes(ctx.label) ? '  🔔 Update' : '';
+              return ` ${ctx.dataset.label}: #${ctx.parsed.y}${upd}`;
+            },
+          }
+        },
+      },
+      scales: {
+        x: { ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }, grid: { color: '#f1f5f9' } },
+        y: {
+          type: scaleType,
+          reverse: true,
+          title: { display: true, text: 'Rank (nhỏ = tốt)', color: '#64748b' },
+          min: scaleType === 'logarithmic' ? 1 : 0,
+          ticks: {
+            callback: v => '#' + v,
+            ...(scaleType === 'logarithmic' ? { autoSkip: false } : {})
+          },
+          afterBuildTicks: scaleType === 'logarithmic' ? axis => {
+            axis.ticks = [1,2,3,5,10,20,50,100,200,500].map(v => ({ value: v }));
+          } : undefined,
+          grid: { color: '#f1f5f9' }
+        }
+      }
+    }
+  });
+}
+
+function buildRangeChart(DATA) {
+  // Floating bar: from best (low) to worst (high) per app — but bar on y-axis, x = rank
+  // We use Chart.js bar [min, max] floating bars.
+  const labels = DATA.apps.map(a => a.appName);
+  const ranges = DATA.apps.map(a => (a.best != null && a.worst != null) ? [a.best, a.worst] : null);
+  const avgs = DATA.apps.map(a => a.avg);
+  const colors = DATA.apps.map((_, i) => palette[i % palette.length]);
+
+  if (charts.bar) charts.bar.destroy();
+  charts.bar = new Chart(document.getElementById('rangeChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Khoảng rank',
+          data: ranges,
+          backgroundColor: colors.map(c => c + '66'),
+          borderColor: colors,
+          borderWidth: 1.5,
+          barPercentage: 0.5,
+          categoryPercentage: 0.7,
+        },
+        {
+          label: 'Avg rank',
+          data: avgs.map((v, i) => v != null ? { x: v, y: labels[i] } : null),
+          backgroundColor: '#0f172a',
+          borderColor: '#0f172a',
+          type: 'scatter',
+          pointStyle: 'rectRot',
+          pointRadius: 7,
+          pointHoverRadius: 9,
+        }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom' },
+        tooltip: {
+          backgroundColor: 'rgba(15,23,42,0.96)', titleColor:'#f1f5f9', bodyColor:'#e2e8f0',
+          callbacks: {
+            label: ctx => {
+              const a = DATA.apps[ctx.dataIndex];
+              if (!a) return '';
+              if (ctx.datasetIndex === 0) return ` Best #${a.best} → Worst #${a.worst}`;
+              return ` Avg: #${fmt1(a.avg)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          reverse: true,                  // best (low) on the right
+          title: { display:true, text:'Rank (đỉnh ← phải)', color:'#64748b' },
+          ticks: { callback: v => '#' + v },
+          grid: { color: '#f1f5f9' },
+          min: 1,
+        },
+        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function rankPill(v, prefix='#') {
+  if (v == null) return '<span class="rank-pill rank-low">—</span>';
+  let cls = 'rank-low';
+  if (v === 1) cls = 'rank-1';
+  else if (v <= 10) cls = 'rank-top';
+  else if (v <= 50) cls = 'rank-good';
+  else if (v <= 100) cls = 'rank-mid';
+  return `<span class="rank-pill ${cls}">${prefix}${typeof v === 'number' && !Number.isInteger(v) ? fmt1(v) : v}</span>`;
+}
+
+function render(DATA) {
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('content').style.display = '';
+
+  // Meta tags
+  const metaTags = document.getElementById('metaTags');
+  const tags = [];
+  if (DATA.country) tags.push(`<span class="meta-tag">${DATA.country}</span>`);
+  if (DATA.category) tags.push(`<span class="meta-tag">Category: ${DATA.category}</span>`);
+  if (DATA.dates && DATA.dates.length) tags.push(`<span class="meta-tag">${DATA.dates[0]} → ${DATA.dates[DATA.dates.length-1]}</span>`);
+  tags.push(`<span class="meta-tag">${DATA.apps.length} apps</span>`);
+  metaTags.innerHTML = tags.join(' ');
+
+  // KPI cards
+  document.getElementById('kpiRow').innerHTML = DATA.apps.map((a, i) => `
+    <div class="kpi">
+      <div class="name" title="${a.appName} (${a.appId})"><span class="swatch" style="background:${palette[i % palette.length]}"></span>${a.appName}</div>
+      <div class="sub">${a.appId}</div>
+      <div class="kpi-grid">
+        <div class="item best"><div class="lbl">Best</div><div class="v">${a.best != null ? '#'+a.best : '—'}</div></div>
+        <div class="item"><div class="lbl">Avg</div><div class="v">${a.avg != null ? '#'+fmt1(a.avg) : '—'}</div></div>
+        <div class="item worst"><div class="lbl">Worst</div><div class="v">${a.worst != null ? '#'+a.worst : '—'}</div></div>
+      </div>
+      <div class="sub" style="margin-top:6px;">Latest: ${a.latest != null ? '#'+a.latest+' ('+a.latestDate+')' : '—'} · 🔔 ${a.updates.length} updates</div>
+    </div>
+  `).join('');
+
+  buildLineChart(DATA, currentScale);
+  buildRangeChart(DATA);
+
+  // Table
+  document.getElementById('appTable').innerHTML = DATA.apps.map((a, i) => `
+    <tr>
+      <td><span class="swatch" style="background:${palette[i % palette.length]}"></span><b>${a.appName}</b><br><span style="font-size:11px;color:#94a3b8;">${a.appId}</span></td>
+      <td class="num">${rankPill(a.best)}</td>
+      <td class="num">${rankPill(a.worst)}</td>
+      <td class="num">${rankPill(a.avg)}</td>
+      <td class="num">${rankPill(a.latest)}</td>
+      <td class="num">${a.top10}</td>
+      <td class="num">${a.top50}</td>
+      <td class="num">${a.updates.length}</td>
+      <td class="num">${a.daysWithData}/${DATA.dates.length}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('loader').classList.add('compact');
+  document.getElementById('clearBtn').style.display = '';
+}
+
+// ---------- Load flow ----------
+async function processFile(file) {
+  try {
+    clearError();
+    setStatus(`<span>Đang đọc <b>${file.name}</b>...</span>`);
+    const text = await readFileAsText(file);
+    const delim = detectDelimiter(text);
+    const rows = parseCSV(text, delim);
+    const DATA = buildDataset(rows);
+    if (!DATA.dates.length || !DATA.apps.length) throw new Error('Không trích xuất được dữ liệu.');
+    LAST_DATA = DATA;
+    render(DATA);
+    try {
+      localStorage.setItem('rankings_data', JSON.stringify(DATA, (k,v) => v instanceof Set ? Array.from(v) : v));
+      localStorage.setItem('rankings_filename', file.name);
+      localStorage.setItem('rankings_loaded_at', new Date().toISOString());
+    } catch(e) {}
+    const ts = new Date().toLocaleString('vi-VN');
+    setStatus(`<span class="ok">✓ Đã load <b>${file.name}</b> — ${DATA.apps.length} apps × ${DATA.dates.length} ngày · ${ts}</span>`);
+  } catch (err) {
+    setStatus(`<span class="err">✗ ${err.message}</span>`);
+    showError(err.stack || err.message);
+  }
+}
+
+document.getElementById('pickBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+const loader = document.getElementById('loader');
+['dragenter','dragover'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.add('dragging'); }));
+['dragleave','drop'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.remove('dragging'); }));
+loader.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) processFile(f); });
+document.getElementById('clearBtn').addEventListener('click', () => {
+  ['rankings_data','rankings_filename','rankings_loaded_at'].forEach(k => localStorage.removeItem(k));
+  location.reload();
+});
+
+document.getElementById('btnLinear').addEventListener('click', () => {
+  currentScale = 'linear';
+  document.getElementById('btnLinear').classList.add('active');
+  document.getElementById('btnLog').classList.remove('active');
+  if (LAST_DATA) buildLineChart(LAST_DATA, currentScale);
+});
+document.getElementById('btnLog').addEventListener('click', () => {
+  currentScale = 'logarithmic';
+  document.getElementById('btnLog').classList.add('active');
+  document.getElementById('btnLinear').classList.remove('active');
+  if (LAST_DATA) buildLineChart(LAST_DATA, currentScale);
+});
+
+(function init() {
+  if (typeof Chart === 'undefined') {
+    showError('Không tải được Chart.js. Hãy giữ file chart.umd.min.js cùng thư mục.');
+    return;
+  }
+  const cached = localStorage.getItem('rankings_data');
+  const fn = localStorage.getItem('rankings_filename') || '?';
+  const at = localStorage.getItem('rankings_loaded_at');
+  if (cached) {
+    try {
+      const DATA = JSON.parse(cached);
+      LAST_DATA = DATA;
+      render(DATA);
+      const tsTxt = at ? ` · ${new Date(at).toLocaleString('vi-VN')}` : '';
+      setStatus(`<span class="ok">✓ Đang hiển thị cache từ <b>${fn}</b>${tsTxt}</span> — load lại để cập nhật.`);
+    } catch (e) {
+      showError('Không đọc được cache: ' + e.message);
+    }
+  }
+})();
+</script>
+</body>
+</html>
