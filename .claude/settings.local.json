@@ -13,7 +13,15 @@
       "Bash(open timespent_dashboard.html)",
       "Bash(open retention_dashboard.html)",
       "Bash(open rankings_dashboard.html)",
-      "Bash(open index.html)"
+      "Bash(open index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:8765/CSV/Retention/App%20Store%20Retention%20\\(April%202026,%20US\\),%20Chart%20Data.csv\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" \"http://localhost:8765/CSV/Retention/App%20Store%20Retention%20%28April%202026%2C%20US%29%2C%20Chart%20Data.csv\")",
+      "Bash(curl -s \"http://localhost:8765/CSV/Retention/App%20Store%20Retention%20\\(April%202026,%20US\\),%20Chart%20Data.csv\")",
+      "Bash(chmod +x /Users/gianghoangduc/Desktop/AppAnalysis/ArrowPuzzle/build-csv-index.sh)",
+      "Bash(/Users/gianghoangduc/Desktop/AppAnalysis/ArrowPuzzle/build-csv-index.sh)",
+      "Bash(node *)",
+      "Bash(curl -s -o /dev/null -w 'GameAnalysis: %{http_code}\\\\n_index.js:    %{http_code}\\\\n' http://localhost:8000/GameAnalysis.html -o /dev/null)",
+      "Bash(curl -s -o /dev/null -w \"_index.js:    %{http_code}, size: %{size_download} bytes\\\\n\" http://localhost:8000/CSV/_index.js)"
     ]
   }
 }

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Avg Time Spent Dashboard</title>
 <script src="chart.umd.min.js"></script>
+<script src="CSV/_index.js" onerror="window.__CSV_INDEX_MISSING__=true"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -81,6 +82,7 @@
     <div class="row">
       <button class="btn" id="pickBtn">📂 Load Time_Spent CSV</button>
       <input type="file" id="fileInput" accept=".csv,.tsv,.txt" style="display:none;">
+      <button class="btn secondary" id="loadDefaultBtn">🔄 Load CSV mặc định</button>
       <span class="hint">hoặc kéo-thả file CSV vào đây</span>
       <span id="status"></span>
       <button class="btn secondary" id="clearBtn" style="display:none;">Clear cached</button>
@@ -411,6 +413,103 @@ function render(DATA) {
   document.getElementById('clearBtn').style.display = '';
 }
 
+// ---------- Default CSV loader (directory listing + fallback) ----------
+function decodeCSVBytes(bytes) {
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return new TextDecoder('utf-16le').decode(bytes);
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return new TextDecoder('utf-16be').decode(bytes);
+  let nul = 0; const probe = Math.min(500, bytes.length);
+  for (let i = 0; i < probe; i++) if (bytes[i] === 0) nul++;
+  if (nul > 5) return new TextDecoder('utf-16le').decode(bytes);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+const DEFAULT_CSV_DIR = 'CSV/TimeSpent/';
+const DEFAULT_CSV_FALLBACK = 'Time_Spent.csv';
+
+async function discoverDefaultCSV() {
+  if (location.protocol !== 'file:') {
+    try {
+      const resp = await fetch(DEFAULT_CSV_DIR);
+      if (resp.ok) {
+        const html = await resp.text();
+        const matches = Array.from(html.matchAll(/href="([^"?#]+\.csv)"/gi))
+          .map(m => decodeURIComponent(m[1]))
+          .filter(f => !f.startsWith('/') && !f.startsWith('?') && !f.startsWith('#'));
+        if (matches.length) {
+          const name = matches[0].split('/').pop();
+          return { url: DEFAULT_CSV_DIR + encodeURIComponent(name), name, source: 'directory listing' };
+        }
+      }
+    } catch (e) {}
+  }
+  return { url: DEFAULT_CSV_DIR + encodeURIComponent(DEFAULT_CSV_FALLBACK), name: DEFAULT_CSV_FALLBACK, source: 'fallback' };
+}
+
+async function loadDefaultCSV(opts) {
+  const silent = opts && opts.silent;
+  const FOLDER_KEY = 'TimeSpent';
+
+  const idx = window.__ARROWPUZZLE_CSV__;
+  if (idx && idx[FOLDER_KEY]) {
+    try {
+      clearError();
+      const entry = idx[FOLDER_KEY];
+      const bytes = Uint8Array.from(atob(entry.content), c => c.charCodeAt(0));
+      const text = decodeCSVBytes(bytes);
+      const delim = detectDelimiter(text);
+      const rows = parseCSV(text, delim);
+      const DATA = buildDataset(rows);
+      if (!DATA.dates.length || !DATA.apps.length) throw new Error('Không trích xuất được dữ liệu.');
+      render(DATA);
+      try {
+        localStorage.setItem('timespent_data', JSON.stringify(DATA));
+        localStorage.setItem('timespent_filename', entry.name + ' (prebuilt index)');
+        localStorage.setItem('timespent_loaded_at', new Date().toISOString());
+        localStorage.setItem('timespent_source', 'prebuilt');
+        localStorage.setItem('timespent_prebuilt_sig', String(entry.content.length));
+      } catch (e) {}
+      const ts = new Date().toLocaleString('vi-VN');
+      setStatus(`<span class="ok">✓ Đã load <b>${entry.name}</b> (prebuilt index) — ${DATA.apps.length} apps × ${DATA.dates.length} ngày · ${ts}</span>`);
+      return;
+    } catch (err) {
+      setStatus(`<span class="err">✗ Lỗi load prebuilt: ${err.message}</span>`);
+      if (!silent) showError(err.stack || err.message);
+      return;
+    }
+  }
+
+  if (location.protocol === 'file:') {
+    setStatus(`<span class="err">✗ Chưa có prebuilt index. Chạy <code>./build-csv-index.sh</code> ở thư mục project (sau khi add/thay CSV) rồi reload — hoặc dùng nút <b>📂 Load Time_Spent CSV</b> để chọn thủ công.</span>`);
+    return;
+  }
+  try {
+    clearError();
+    setStatus(`<span>Đang tìm CSV mặc định trong <code>${DEFAULT_CSV_DIR}</code>...</span>`);
+    const picked = await discoverDefaultCSV();
+    const resp = await fetch(picked.url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} — ${picked.name}`);
+    const text = await resp.text();
+    const delim = detectDelimiter(text);
+    const rows = parseCSV(text, delim);
+    const DATA = buildDataset(rows);
+    if (!DATA.dates.length || !DATA.apps.length) throw new Error('Không trích xuất được dữ liệu.');
+    render(DATA);
+    try {
+      localStorage.setItem('timespent_data', JSON.stringify(DATA));
+      localStorage.setItem('timespent_filename', picked.name + ' (mặc định)');
+      localStorage.setItem('timespent_loaded_at', new Date().toISOString());
+    } catch (e) {}
+    const ts = new Date().toLocaleString('vi-VN');
+    setStatus(`<span class="ok">✓ Đã load mặc định <b>${picked.name}</b> (${picked.source}) — ${DATA.apps.length} apps × ${DATA.dates.length} ngày · ${ts}</span>`);
+  } catch (err) {
+    const hint = location.protocol === 'file:'
+      ? ` — bạn đang mở qua file://, Chrome có thể chặn fetch. Hãy chạy <code>python3 -m http.server</code> trong thư mục project rồi mở qua http://localhost:8000`
+      : '';
+    setStatus(`<span class="err">✗ Không load được CSV mặc định: ${err.message}${hint}</span>`);
+    if (!silent) showError((err.stack || err.message) + (hint ? '\n\n' + hint.replace(/<[^>]+>/g, '') : ''));
+  }
+}
+
 // ---------- Load flow ----------
 async function processFile(file) {
   try {
@@ -426,6 +525,8 @@ async function processFile(file) {
       localStorage.setItem('timespent_data', JSON.stringify(DATA));
       localStorage.setItem('timespent_filename', file.name);
       localStorage.setItem('timespent_loaded_at', new Date().toISOString());
+      localStorage.setItem('timespent_source', 'manual');
+      localStorage.removeItem('timespent_prebuilt_sig');
     } catch (e) {}
     const ts = new Date().toLocaleString('vi-VN');
     setStatus(`<span class="ok">✓ Đã load <b>${file.name}</b> — ${DATA.apps.length} apps × ${DATA.dates.length} ngày · ${ts}</span>`);
@@ -437,15 +538,21 @@ async function processFile(file) {
 
 document.getElementById('pickBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+document.getElementById('loadDefaultBtn').addEventListener('click', () => loadDefaultCSV());
 const loader = document.getElementById('loader');
 ['dragenter','dragover'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.add('dragging'); }));
 ['dragleave','drop'].forEach(ev => loader.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); loader.classList.remove('dragging'); }));
 loader.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) processFile(f); });
 document.getElementById('clearBtn').addEventListener('click', () => {
-  localStorage.removeItem('timespent_data');
-  localStorage.removeItem('timespent_filename');
-  localStorage.removeItem('timespent_loaded_at');
-  location.reload();
+  ['timespent_data','timespent_filename','timespent_loaded_at',
+   'timespent_source','timespent_prebuilt_sig'].forEach(k => localStorage.removeItem(k));
+  document.getElementById('content').style.display = 'none';
+  document.getElementById('empty').style.display = '';
+  document.getElementById('loader').classList.remove('compact');
+  document.getElementById('clearBtn').style.display = 'none';
+  clearError();
+  setStatus('<span>Cache đã xóa — đang load lại từ prebuilt index...</span>');
+  loadDefaultCSV();
 });
 
 (function init() {
@@ -456,15 +563,28 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   const cached = localStorage.getItem('timespent_data');
   const fn = localStorage.getItem('timespent_filename') || '?';
   const at = localStorage.getItem('timespent_loaded_at');
+  const source = localStorage.getItem('timespent_source');
+  const cachedSig = localStorage.getItem('timespent_prebuilt_sig');
+  const idx = window.__ARROWPUZZLE_CSV__;
+  const entry = idx && idx['TimeSpent'];
+  const currentSig = entry ? String(entry.content.length) : null;
+
+  if (entry && source !== 'manual' && currentSig !== cachedSig) {
+    loadDefaultCSV({ silent: true });
+    return;
+  }
   if (cached) {
     try {
       const DATA = JSON.parse(cached);
       render(DATA);
       const tsTxt = at ? ` · ${new Date(at).toLocaleString('vi-VN')}` : '';
-      setStatus(`<span class="ok">✓ Đang hiển thị data cache từ <b>${fn}</b>${tsTxt}</span> — load lại file để cập nhật.`);
+      const srcTag = source === 'manual' ? ' [manual override]' : '';
+      setStatus(`<span class="ok">✓ Đang hiển thị data cache từ <b>${fn}</b>${srcTag}${tsTxt}</span> — load lại file để cập nhật.`);
     } catch (e) {
       showError('Không đọc được cache: ' + e.message);
     }
+  } else {
+    loadDefaultCSV({ silent: true });
   }
 })();
 </script>
