@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>ArrowPuzzle — Master Dashboard</title>
+<style>
+  :root {
+    --nav-h: 56px;
+    --bg: #0f172a;
+    --bg-soft: #1e293b;
+    --line: #334155;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--bg); color: #e2e8f0;
+    padding: 0 20px;
+    height: var(--nav-h);
+    display: flex; align-items: center; gap: 6px;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  }
+  nav .brand { font-weight: 600; color: #fff; margin-right: 18px; font-size: 14px; }
+  nav a {
+    color: #cbd5e1; text-decoration: none;
+    padding: 6px 14px; border-radius: 8px;
+    font-size: 13px; font-weight: 500;
+    transition: all 0.15s;
+  }
+  nav a:hover { background: var(--bg-soft); color: #fff; }
+  nav a.active { background: #3b82f6; color: #fff; }
+  nav .spacer { flex: 1; }
+  nav .tool { color: #94a3b8; font-size: 12px; cursor: pointer; padding: 4px 10px; border-radius: 6px; }
+  nav .tool:hover { background: var(--bg-soft); color: #fff; }
+
+  .section-head {
+    background: #fff;
+    padding: 18px 24px 12px;
+    border-bottom: 1px solid #e2e8f0;
+  }
+  .section-head h2 { margin: 0 0 4px; font-size: 18px; color: #0f172a; display: flex; align-items: center; gap: 8px; }
+  .section-head .desc { color: #64748b; font-size: 13px; }
+  .section-head .open-direct {
+    float: right;
+    color: #3b82f6; text-decoration: none;
+    font-size: 12px; padding: 4px 10px;
+    border: 1px solid #dbeafe; border-radius: 6px;
+    background: #eff6ff;
+  }
+  .section-head .open-direct:hover { background: #dbeafe; }
+
+  iframe {
+    width: 100%;
+    border: 0;
+    display: block;
+    background: #f8fafc;
+  }
+  .iframe-wrap { position: relative; }
+  .resize-handle {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: -10px;
+    background: #cbd5e1; color: #475569;
+    padding: 2px 14px; border-radius: 10px;
+    font-size: 11px; cursor: ns-resize;
+    z-index: 5; user-select: none;
+  }
+  .resize-handle:hover { background: #94a3b8; color: #fff; }
+
+  .divider { height: 30px; background: linear-gradient(to bottom, #e2e8f0, #f1f5f9); }
+
+  footer {
+    padding: 24px; text-align: center;
+    color: #64748b; font-size: 12px;
+    border-top: 1px solid #e2e8f0; background: #fff;
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <span class="brand">📊 ArrowPuzzle Master Dashboard</span>
+  <a href="#sec-downloads" data-target="sec-downloads">📥 Downloads & DAU</a>
+  <a href="#sec-timespent" data-target="sec-timespent">⏱️ Time Spent</a>
+  <a href="#sec-retention" data-target="sec-retention">🔁 Retention</a>
+  <a href="#sec-rankings"  data-target="sec-rankings">🏅 Rankings</a>
+  <span class="spacer"></span>
+  <span class="tool" id="expandAll">Expand all</span>
+  <span class="tool" id="collapseAll">Collapse all</span>
+</nav>
+
+<section id="sec-downloads">
+  <div class="section-head">
+    <a class="open-direct" href="dashboard.html" target="_blank">↗ Mở riêng</a>
+    <h2>📥 Downloads &amp; DAU</h2>
+    <div class="desc">Load <code>Data_Download_and_DAU.csv</code> (wide hoặc long format).</div>
+  </div>
+  <div class="iframe-wrap">
+    <iframe src="dashboard.html" data-default-height="1600"></iframe>
+    <div class="resize-handle" title="Kéo để chỉnh chiều cao">↕ kéo để resize</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="sec-timespent">
+  <div class="section-head">
+    <a class="open-direct" href="timespent_dashboard.html" target="_blank">↗ Mở riêng</a>
+    <h2>⏱️ Avg Time Spent</h2>
+    <div class="desc">Load <code>Time_Spent.csv</code> — phút/người/ngày.</div>
+  </div>
+  <div class="iframe-wrap">
+    <iframe src="timespent_dashboard.html" data-default-height="1500"></iframe>
+    <div class="resize-handle" title="Kéo để chỉnh chiều cao">↕ kéo để resize</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="sec-retention">
+  <div class="section-head">
+    <a class="open-direct" href="retention_dashboard.html" target="_blank">↗ Mở riêng</a>
+    <h2>🔁 App Store Retention</h2>
+    <div class="desc">Load <code>App Store Retention (...).csv</code> — % retention theo Day N.</div>
+  </div>
+  <div class="iframe-wrap">
+    <iframe src="retention_dashboard.html" data-default-height="1400"></iframe>
+    <div class="resize-handle" title="Kéo để chỉnh chiều cao">↕ kéo để resize</div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<section id="sec-rankings">
+  <div class="section-head">
+    <a class="open-direct" href="rankings_dashboard.html" target="_blank">↗ Mở riêng</a>
+    <h2>🏅 Category Rankings</h2>
+    <div class="desc">Load <code>Google Play Category Rankings (...).csv</code> — rank trong category.</div>
+  </div>
+  <div class="iframe-wrap">
+    <iframe src="rankings_dashboard.html" data-default-height="1700"></iframe>
+    <div class="resize-handle" title="Kéo để chỉnh chiều cao">↕ kéo để resize</div>
+  </div>
+</section>
+
+<footer>
+  Mỗi phần là 1 dashboard riêng, có cache localStorage riêng. Click "↗ Mở riêng" để mở fullscreen 1 phần.
+</footer>
+
+<script>
+// ---------- Auto-resize iframes to fit content ----------
+function tryAutoResize(iframe) {
+  const fallback = parseInt(iframe.dataset.defaultHeight || '1500', 10);
+  let useFallback = false;
+  let lastH = 0;
+
+  function resize() {
+    if (useFallback) return;
+    try {
+      const doc = iframe.contentDocument;
+      if (!doc || !doc.body) return;
+      const h = Math.max(
+        doc.body.scrollHeight,
+        doc.documentElement.scrollHeight,
+        doc.body.offsetHeight,
+        doc.documentElement.offsetHeight
+      );
+      if (h > 100 && Math.abs(h - lastH) > 5) {
+        iframe.style.height = (h + 30) + 'px';
+        lastH = h;
+      }
+    } catch (e) {
+      // Cross-origin (e.g., file:// in Chrome treats each file as unique origin)
+      useFallback = true;
+      iframe.style.height = fallback + 'px';
+    }
+  }
+
+  iframe.addEventListener('load', () => {
+    resize();
+    // Observe DOM changes inside iframe (CSV load → charts render → height changes)
+    try {
+      const doc = iframe.contentDocument;
+      if (doc && doc.body) {
+        const obs = new MutationObserver(() => setTimeout(resize, 50));
+        obs.observe(doc.body, { childList: true, subtree: true, attributes: true });
+      }
+    } catch(e) {}
+    // Poll every second as safety net for chart animations
+    setInterval(resize, 1000);
+  });
+
+  // Set initial fallback height before load
+  iframe.style.height = fallback + 'px';
+}
+document.querySelectorAll('iframe').forEach(tryAutoResize);
+
+// ---------- Manual resize handles ----------
+document.querySelectorAll('.resize-handle').forEach(handle => {
+  const wrap = handle.parentElement;
+  const iframe = wrap.querySelector('iframe');
+  let startY = 0, startH = 0, dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY; startH = iframe.offsetHeight;
+    document.body.style.cursor = 'ns-resize';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const newH = Math.max(400, startH + (e.clientY - startY));
+    iframe.style.height = newH + 'px';
+    iframe.dataset.defaultHeight = newH;
+  });
+  document.addEventListener('mouseup', () => {
+    if (dragging) { dragging = false; document.body.style.cursor = ''; }
+  });
+});
+
+// ---------- Nav: highlight active section ----------
+const navLinks = document.querySelectorAll('nav a[data-target]');
+const sections = Array.from(navLinks).map(a => document.getElementById(a.dataset.target));
+function updateActive() {
+  const fromTop = window.scrollY + 80;
+  let activeIdx = 0;
+  sections.forEach((sec, i) => { if (sec.offsetTop <= fromTop) activeIdx = i; });
+  navLinks.forEach((a, i) => a.classList.toggle('active', i === activeIdx));
+}
+window.addEventListener('scroll', updateActive);
+updateActive();
+
+// Smooth scroll with offset for sticky nav
+navLinks.forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.getElementById(a.dataset.target);
+    if (!target) return;
+    const y = target.offsetTop - 60;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+  });
+});
+
+// ---------- Expand/Collapse all sections ----------
+const sectionWraps = document.querySelectorAll('.iframe-wrap');
+document.getElementById('expandAll').addEventListener('click', () => {
+  sectionWraps.forEach(w => w.style.display = '');
+});
+document.getElementById('collapseAll').addEventListener('click', () => {
+  sectionWraps.forEach(w => w.style.display = 'none');
+});
+
+// Toggle section by clicking its heading
+document.querySelectorAll('.section-head h2').forEach(h => {
+  h.style.cursor = 'pointer';
+  h.title = 'Click để ẩn/hiện phần này';
+  h.addEventListener('click', () => {
+    const wrap = h.closest('section').querySelector('.iframe-wrap');
+    wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>

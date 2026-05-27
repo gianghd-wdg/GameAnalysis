@@ -12,7 +12,8 @@
       "Bash(python3 -c ' *)",
       "Bash(open timespent_dashboard.html)",
       "Bash(open retention_dashboard.html)",
-      "Bash(open rankings_dashboard.html)"
+      "Bash(open rankings_dashboard.html)",
+      "Bash(open index.html)"
     ]
   }
 }

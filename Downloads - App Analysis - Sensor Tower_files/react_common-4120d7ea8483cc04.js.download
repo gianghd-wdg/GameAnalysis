@@ -1,2 +1,0 @@
-(()=>{"use strict";try{window.localStorage.setItem("fixLocalStorageForSafariIncognito",0)}catch(o){console.warn("Browser doesn't allow to setItem to localStorage",o),window.localStorage.setItem=function(){}}})();
-//# sourceMappingURL=https://app.sensortower.com/sourcemaps/js/react_common-4120d7ea8483cc04.js.map
